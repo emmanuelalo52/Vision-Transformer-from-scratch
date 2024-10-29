@@ -13,7 +13,7 @@ class VITConfig:
 device = "cpu"
 if torch.cuda.is_available():
     device = "cuda"
-elif hasattr(torch.backends,"mps") and torch.backends.mps.is_available():
+elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
     device = "mps"
 print(f"Device: {device}")
 
@@ -32,20 +32,17 @@ class SelfAttention(nn.Module):
         self.c_attn = nn.Linear(config.n_emb, 3 * config.n_emb)
 
     def forward(self,x):
-        B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_emb   )
+        B, N, C = x.size() # batch size, sequence length, embedding dimensionality (n_emb   )
         # calculate query, key, values for all heads in batch and move head forward to be the batch dim
         # nh is "number of heads", hs is "head size", and C (number of channels) = nh * hs
-        qkv = self.c_attn(x)
-        q,k,v = qkv.split(self.n_emb, dim=2)
-        q = q.view(B,T,self.n_head, C // self.n_head).transpose(1,2)
-        k = k.view(B,T,self.n_head, C // self.n_head).transpose(1,2)
-        v = v.view(B,T,self.n_head, C // self.n_head).transpose(1,2)
+        qkv = self.qkv(x).reshape(B, N, 3, self.n_heads, C // self.n_heads).permute(2, 0, 3, 1, 4)
+        q, k, v = qkv[0], qkv[1], qkv[2]
 
-        out = F.scaled_dot_product_attention(q, k, v, is_causal=True) # flash attention
-        out = out.transpose(1,2).contiguous().view(B,T,C)
-
-        out = self.proj(out)
-        return out
+        attn = (q @ k.transpose(-2, -1)) * self.scale
+        attn = attn.softmax(dim=-1)
+        x = (attn @ v).transpose(1, 2).reshape(B, N, C)
+        x = self.proj(x)
+        return x
     
 class MLP(nn.Module):
     def __init__(self,config):
@@ -91,8 +88,9 @@ class PatchEmbedding(nn.Module):
         )
         self.flatten = nn.Flatten(2)
     def forward(self,x):
-        x = self.ln_proj(x)
-        x = self.flatten(x)
-        x = x.transpose(1,2)
+        # x: (B, C, H, W)
+        x = self.ln_proj(x) # (B, embed_dim, H//patch_size, W//patch_size)
+        x = self.flatten(x) # (B, embed_dim, H*W//patch_size^2)
+        x = x.transpose(1,2) # (B, H*W//patch_size^2, embed_dim)
         return x
 
