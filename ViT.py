@@ -244,6 +244,6 @@ def evaluate(model, test_loader, criterion, device):
 # Training and evaluation
 num_epochs = 5
 for epoch in range(num_epochs):
-    train_loss, train_accuracy = train(model, train_loader, criterion, optimizer, device)
+    train_loss, train_accuracy = train_step(model, train_loader, criterion, optimizer, device)
     test_loss, test_accuracy = evaluate(model, test_loader, criterion, device)
     print(f'Epoch {epoch+1}/{num_epochs}, Train Loss: {train_loss:.4f}, Train Accuracy: {train_accuracy:.2f}%, Test Loss: {test_loss:.4f}, Test Accuracy: {test_accuracy:.2f}%')
